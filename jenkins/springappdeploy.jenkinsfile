@@ -51,25 +51,25 @@ pipeline {
                 script {
                     echo "Ensuring MySQL container is running..."
 
-                    // Start MySQL container only if not running
-                    def mysqlRunning = sh(script: "docker ps --filter name=${MYSQL_CONTAINER} --format '{{.Names}}'", returnStdout: true).trim()
+                    // ✅ Windows batch command to check if MySQL is running
+                    bat """
+                    FOR /F "tokens=*" %%i IN ('docker ps --filter "name=%MYSQL_CONTAINER%" --format "{{.Names}}"') DO SET MYSQL_RUNNING=%%i
 
-                    if (mysqlRunning != MYSQL_CONTAINER) {
+                    IF "%MYSQL_RUNNING%"=="" (
                         echo "MySQL container not running. Starting it..."
-                        bat """
-                        docker run -d \
-                        --name %MYSQL_CONTAINER% \
-                        -e MYSQL_ROOT_PASSWORD=root \
-                        -e MYSQL_DATABASE=erp \
-                        -e MYSQL_USER=root \
-                        -e MYSQL_PASSWORD=root \
-                        -p 3306:3306 \
-                        -v %MYSQL_VOLUME%:/var/lib/mysql \
+                        docker run -d ^
+                        --name %MYSQL_CONTAINER% ^
+                        -e MYSQL_ROOT_PASSWORD=root ^
+                        -e MYSQL_DATABASE=erp ^
+                        -e MYSQL_USER=root ^
+                        -e MYSQL_PASSWORD=root ^
+                        -p 3306:3306 ^
+                        -v %MYSQL_VOLUME%:/var/lib/mysql ^
                         mysql:8
-                        """
-                    } else {
+                    ) ELSE (
                         echo "MySQL container is already running."
-                    }
+                    )
+                    """
                 }
             }
         }
@@ -118,8 +118,8 @@ pipeline {
 
                     bat """
                     REM  Rollback if deployment fails
-                    if %ERRORLEVEL% NEQ 0 (
-                        echo " Deployment failed, rolling back..."
+                    IF %ERRORLEVEL% NEQ 0 (
+                        echo "Deployment failed, rolling back..."
                         docker-compose stop backend
                         docker tag %IMAGE_NAME%:%BACKUP_VERSION% %IMAGE_NAME%:latest
                         docker-compose up -d --no-deps backend
@@ -134,7 +134,6 @@ pipeline {
                 script {
                     echo "Cleaning up old Docker images..."
 
-                    // Remove the backup image after successful deployment
                     bat '''
                     echo "Removing backup image..."
                     docker rmi -f %IMAGE_NAME%:%BACKUP_VERSION% || echo "No backup image found"
@@ -151,7 +150,6 @@ pipeline {
         success {
             echo "Deployment completed successfully!"
             
-            //  Remove backup image on success
             script {
                 echo "Deleting backup image..."
                 bat """
