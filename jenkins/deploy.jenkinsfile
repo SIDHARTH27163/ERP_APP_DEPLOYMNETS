@@ -13,19 +13,21 @@ pipeline {
     }
 
     stages {
+
         stage('Clean Workspace') {
-                steps {
-                    echo " Cleaning Workspace..."
-                    cleanWs()  //  Clean workspace before cloning
-                }
+            steps {
+                echo " Cleaning Workspace..."
+                cleanWs()  //  Clean before cloning
             }
+        }
+
         stage('Clone Repo') {
             steps {
-                echo "Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
+                echo " Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
                 script {
-                    //  Clone selected branch dynamically
+                    //  Clone into subfolder named `source`
                     sh """
-                    git clone -b ${BRANCH} https://github.com/${GITHUB_REPO}.git .
+                    git clone -b ${BRANCH} https://github.com/${GITHUB_REPO}.git source
                     """
                 }
             }
@@ -34,11 +36,11 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "Building Docker Image: ${IMAGE_NAME}:${VERSION}"
+                    echo " Building Docker Image: ${IMAGE_NAME}:${VERSION}"
 
-                    // Docker build with versioning
+                    //  Navigate to correct folder before building
                     sh """
-                    cd ERP_SPRINGBOOT_APIs
+                  
                     docker build -t ${IMAGE_NAME}:${VERSION} .
                     """
                 }
@@ -48,9 +50,9 @@ pipeline {
         stage('Backup Existing Container') {
             steps {
                 script {
-                    echo "Creating Backup of Current Container"
+                    echo " Creating Backup of Current Container"
 
-                    // Backup current container
+                    //  Backup current container
                     sh """
                     docker-compose down || echo "No running container"
                     docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:${BACKUP_VERSION} || echo "No backup available"
@@ -62,10 +64,11 @@ pipeline {
         stage('Deploy New Image') {
             steps {
                 script {
-                    echo "Deploying new Docker image..."
+                    echo " Deploying new Docker image..."
 
-                    // Update docker-compose with new image version
+                    //  Deploy from correct folder
                     sh """
+                  
                     sed -i "s|image:.*|image: ${IMAGE_NAME}:${VERSION}|" docker-compose.yml
                     docker-compose up -d
                     """
@@ -76,7 +79,7 @@ pipeline {
         stage('Post-Deployment Cleanup') {
             steps {
                 script {
-                    echo " Cleaning up old Docker images..."
+                    echo "Cleaning up old Docker images..."
 
                     // Cleanup old images
                     sh '''
@@ -87,10 +90,12 @@ pipeline {
             }
         }
 
-       stage('Rollback on Failure') {
+        stage('Rollback on Failure') {
             steps {
                 script {
-                    echo "Checking for Rollback..."
+                    echo "🔄 Checking for Rollback..."
+
+                    // Rollback on failure
                     sh """
                     if [ \${?} -ne 0 ]; then
                         echo " Deployment failed, rolling back..."
@@ -101,8 +106,6 @@ pipeline {
                 }
             }
         }
-
-
     }
 
     post {
