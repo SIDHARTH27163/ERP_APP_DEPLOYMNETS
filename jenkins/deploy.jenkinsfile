@@ -1,0 +1,97 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "springboot-container"
+        VERSION = "1.0.${BUILD_NUMBER}"         // 🛠️ Versioning
+        BACKUP_VERSION = "backup-${BUILD_NUMBER - 1}"
+    }
+
+    stages {
+        stage('Clone Repo') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    echo "Building Docker Image: ${IMAGE_NAME}:${VERSION}"
+
+                    // ✅ Build new Docker image
+                    sh """
+                    docker build -t ${IMAGE_NAME}:${VERSION} .
+                    """
+                }
+            }
+        }
+
+        stage('Backup Existing Container') {
+            steps {
+                script {
+                    echo "Creating Backup of Current Container"
+
+                    // ✅ Backup current container before deploying new one
+                    sh """
+                    docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:${BACKUP_VERSION}
+                    """
+                }
+            }
+        }
+
+        stage('Deploy New Image') {
+            steps {
+                script {
+                    echo "Deploying new Docker image"
+
+                    // ✅ Stop existing container & run new one
+                    sh """
+                    docker-compose down
+                    docker-compose up -d
+                    """
+                }
+            }
+        }
+
+        stage('Post-Deployment Cleanup') {
+            steps {
+                script {
+                    echo "Cleaning up old Docker images"
+
+                    // ✅ Remove old backup image
+                    sh """
+                    docker image prune -f
+                    docker rmi -f ${IMAGE_NAME}:${BACKUP_VERSION} || true
+                    """
+                }
+            }
+        }
+
+        stage('Rollback on Failure') {
+            steps {
+                script {
+                    echo "Checking for Rollback"
+
+                    // ✅ Rollback if build fails
+                    sh """
+                    if [ $? -ne 0 ]; then
+                      echo "Rolling back to Backup..."
+                      docker tag ${IMAGE_NAME}:${BACKUP_VERSION} ${IMAGE_NAME}:latest
+                      docker-compose up -d
+                    fi
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Deployment Successful!"
+        }
+        failure {
+            echo "❌ Deployment Failed. Rolling back..."
+        }
+    }
+}
