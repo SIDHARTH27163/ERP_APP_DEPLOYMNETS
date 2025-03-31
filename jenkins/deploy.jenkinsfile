@@ -10,6 +10,7 @@ pipeline {
     stages {
         stage('Clone Repo') {
             steps {
+                echo "📥 Cloning repository..."
                 checkout scm
             }
         }
@@ -17,9 +18,9 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "Building Docker Image: ${IMAGE_NAME}:${VERSION}"
-
-                    // ✅ Build new Docker image
+                    echo "🔨 Building Docker Image: ${IMAGE_NAME}:${VERSION}"
+                    
+                    // ✅ Build Docker image
                     sh """
                     docker build -t ${IMAGE_NAME}:${VERSION} .
                     """
@@ -30,11 +31,16 @@ pipeline {
         stage('Backup Existing Container') {
             steps {
                 script {
-                    echo "Creating Backup of Current Container"
+                    echo "📦 Creating Backup of Current Container"
 
-                    // ✅ Backup current container before deploying new one
+                    // ✅ Stop existing container
                     sh """
-                    docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:${BACKUP_VERSION}
+                    docker-compose down || echo "No running container"
+                    """
+
+                    // ✅ Backup current image
+                    sh """
+                    docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:${BACKUP_VERSION} || echo "No backup available"
                     """
                 }
             }
@@ -43,11 +49,10 @@ pipeline {
         stage('Deploy New Image') {
             steps {
                 script {
-                    echo "Deploying new Docker image"
+                    echo "🚀 Deploying new Docker image..."
 
-                    // ✅ Stop existing container & run new one
+                    // ✅ Run the new container with the new image
                     sh """
-                    docker-compose down
                     docker-compose up -d
                     """
                 }
@@ -57,14 +62,13 @@ pipeline {
         stage('Post-Deployment Cleanup') {
             steps {
                 script {
-                    echo "Cleaning up old Docker images"
+                    echo "🧹 Cleaning up old Docker images..."
 
-                    // ✅ Remove old backup image
-                   sh """
-                        docker image prune -f
-                        docker rmi -f \${IMAGE_NAME}:\${BACKUP_VERSION} || true
-                        """
-
+                    // ✅ Properly escape dollar sign
+                    sh '''
+                    docker image prune -f
+                    docker rmi -f ${IMAGE_NAME}:${BACKUP_VERSION} || true
+                    '''
                 }
             }
         }
@@ -72,12 +76,12 @@ pipeline {
         stage('Rollback on Failure') {
             steps {
                 script {
-                    echo "Checking for Rollback"
+                    echo "🔄 Checking for Rollback..."
 
-                    // ✅ Rollback if build fails
+                    // ✅ Check container status
                     sh """
                     if [ $? -ne 0 ]; then
-                      echo "Rolling back to Backup..."
+                      echo " Deployment failed, rolling back..."
                       docker tag ${IMAGE_NAME}:${BACKUP_VERSION} ${IMAGE_NAME}:latest
                       docker-compose up -d
                     fi
@@ -89,10 +93,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployment Successful!"
+            echo "✅ Deployment completed successfully!"
         }
         failure {
-            echo "❌ Deployment Failed. Rolling back..."
+            echo "❌ Deployment failed. Rolling back..."
         }
     }
 }
