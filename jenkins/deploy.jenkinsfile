@@ -81,14 +81,14 @@ pipeline {
             }
         }
 
-        stage('Rollback on Failure') {
+       stage('Rollback on Failure') {
             steps {
                 script {
                     echo "🔄 Checking for Rollback..."
 
-                    // ✅ Rollback logic
+                    // ✅ Correct Rollback
                     sh """
-                    if [ \\$? -ne 0 ]; then
+                    if [ $? -ne 0 ]; then
                         echo "🚨 Deployment failed, rolling back..."
                         docker tag ${IMAGE_NAME}:${BACKUP_VERSION} ${IMAGE_NAME}:latest
                         docker-compose up -d
@@ -97,6 +97,7 @@ pipeline {
                 }
             }
         }
+
     }
 
     post {
