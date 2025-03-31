@@ -8,7 +8,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = "springboot-container"
-        VERSION = "1.0.${BUILD_NUMBER}"                      //  Versioning
+        VERSION = "1.0.${BUILD_NUMBER}"                      // ✅ Versioning
         BACKUP_VERSION = "backup-${BUILD_NUMBER - 1}"        
     }
 
@@ -16,18 +16,31 @@ pipeline {
 
         stage('Clean Workspace') {
             steps {
-                echo " Cleaning Workspace..."
-                cleanWs()  //  Clean before cloning
+                echo "🧹 Cleaning Workspace..."
+                cleanWs()  // ✅ Clean before cloning
             }
         }
 
         stage('Clone Repo') {
             steps {
-                echo " Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
+                echo "📥 Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
                 script {
-                    
                     sh """
                     git clone -b ${BRANCH} https://github.com/${GITHUB_REPO}.git 
+                    """
+                }
+            }
+        }
+
+        stage('Build with Maven') {
+            steps {
+                script {
+                    echo "🔨 Running Maven Build: mvn clean install"
+                    
+                    // ✅ Navigate to repo folder and run mvn build
+                    sh """
+              
+                    mvn clean install
                     """
                 }
             }
@@ -36,11 +49,11 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo " Building Docker Image: ${IMAGE_NAME}:${VERSION}"
+                    echo "🐳 Building Docker Image: ${IMAGE_NAME}:${VERSION}"
 
-                    //  Navigate to correct folder before building
+                    // ✅ Build Docker image after mvn build
                     sh """
-                  
+                 
                     docker build -t ${IMAGE_NAME}:${VERSION} .
                     """
                 }
@@ -50,9 +63,9 @@ pipeline {
         stage('Backup Existing Container') {
             steps {
                 script {
-                    echo " Creating Backup of Current Container"
+                    echo "📦 Creating Backup of Current Container"
 
-                    //  Backup current container
+                    // ✅ Backup current container
                     sh """
                     docker-compose down || echo "No running container"
                     docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:${BACKUP_VERSION} || echo "No backup available"
@@ -64,11 +77,11 @@ pipeline {
         stage('Deploy New Image') {
             steps {
                 script {
-                    echo " Deploying new Docker image..."
+                    echo "🚀 Deploying new Docker image..."
 
-                    //  Deploy from correct folder
+                    // ✅ Deploy updated image
                     sh """
-                   
+            
                     sed -i "s|image:.*|image: ${IMAGE_NAME}:${VERSION}|" docker-compose.yml
                     docker-compose up -d
                     """
@@ -79,9 +92,9 @@ pipeline {
         stage('Post-Deployment Cleanup') {
             steps {
                 script {
-                    echo "Cleaning up old Docker images..."
+                    echo "🧹 Cleaning up old Docker images..."
 
-                    // Cleanup old images
+                    // ✅ Clean old images
                     sh '''
                     docker image prune -f
                     docker rmi -f ${IMAGE_NAME}:${BACKUP_VERSION} || true
@@ -95,10 +108,10 @@ pipeline {
                 script {
                     echo "🔄 Checking for Rollback..."
 
-                    // Rollback on failure
+                    // ✅ Rollback on failure
                     sh """
                     if [ \${?} -ne 0 ]; then
-                        echo " Deployment failed, rolling back..."
+                        echo "🚨 Deployment failed, rolling back..."
                         docker tag \${IMAGE_NAME}:\${BACKUP_VERSION} \${IMAGE_NAME}:latest
                         docker-compose up -d
                     fi
@@ -110,10 +123,10 @@ pipeline {
 
     post {
         success {
-            echo "Deployment completed successfully!"
+            echo "✅ Deployment completed successfully!"
         }
         failure {
-            echo "Deployment failed. Rolling back..."
+            echo "❌ Deployment failed. Rolling back..."
         }
     }
 }
