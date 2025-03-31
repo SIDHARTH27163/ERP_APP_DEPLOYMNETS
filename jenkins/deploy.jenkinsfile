@@ -8,22 +8,22 @@ pipeline {
 
     environment {
         IMAGE_NAME = "springboot-container"
-        VERSION = "1.0.${BUILD_NUMBER}"                      // ✅ Versioning
+        VERSION = "1.0.${BUILD_NUMBER}"                      //  Versioning
         BACKUP_VERSION = "backup-${BUILD_NUMBER - 1}"        
     }
 
     stages {
         stage('Clean Workspace') {
                 steps {
-                    echo "🧹 Cleaning Workspace..."
-                    cleanWs()  // ✅ Clean workspace before cloning
+                    echo " Cleaning Workspace..."
+                    cleanWs()  //  Clean workspace before cloning
                 }
             }
         stage('Clone Repo') {
             steps {
-                echo "📥 Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
+                echo "Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
                 script {
-                    // ✅ Clone selected branch dynamically
+                    //  Clone selected branch dynamically
                     sh """
                     git clone -b ${BRANCH} https://github.com/${GITHUB_REPO}.git .
                     """
@@ -34,10 +34,11 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "🔨 Building Docker Image: ${IMAGE_NAME}:${VERSION}"
+                    echo "Building Docker Image: ${IMAGE_NAME}:${VERSION}"
 
-                    // ✅ Docker build with versioning
+                    // Docker build with versioning
                     sh """
+                    cd ERP_SPRINGBOOT_APIs
                     docker build -t ${IMAGE_NAME}:${VERSION} .
                     """
                 }
@@ -47,9 +48,9 @@ pipeline {
         stage('Backup Existing Container') {
             steps {
                 script {
-                    echo "📦 Creating Backup of Current Container"
+                    echo "Creating Backup of Current Container"
 
-                    // ✅ Backup current container
+                    // Backup current container
                     sh """
                     docker-compose down || echo "No running container"
                     docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:${BACKUP_VERSION} || echo "No backup available"
@@ -61,9 +62,9 @@ pipeline {
         stage('Deploy New Image') {
             steps {
                 script {
-                    echo "🚀 Deploying new Docker image..."
+                    echo "Deploying new Docker image..."
 
-                    // ✅ Update docker-compose with new image version
+                    // Update docker-compose with new image version
                     sh """
                     sed -i "s|image:.*|image: ${IMAGE_NAME}:${VERSION}|" docker-compose.yml
                     docker-compose up -d
@@ -75,9 +76,9 @@ pipeline {
         stage('Post-Deployment Cleanup') {
             steps {
                 script {
-                    echo "🧹 Cleaning up old Docker images..."
+                    echo " Cleaning up old Docker images..."
 
-                    // ✅ Cleanup old images
+                    // Cleanup old images
                     sh '''
                     docker image prune -f
                     docker rmi -f ${IMAGE_NAME}:${BACKUP_VERSION} || true
@@ -89,12 +90,10 @@ pipeline {
        stage('Rollback on Failure') {
             steps {
                 script {
-                    echo "🔄 Checking for Rollback..."
-
-                    // ✅ Proper interpolation
+                    echo "Checking for Rollback..."
                     sh """
                     if [ \${?} -ne 0 ]; then
-                        echo "🚨 Deployment failed, rolling back..."
+                        echo " Deployment failed, rolling back..."
                         docker tag \${IMAGE_NAME}:\${BACKUP_VERSION} \${IMAGE_NAME}:latest
                         docker-compose up -d
                     fi
@@ -108,10 +107,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployment completed successfully!"
+            echo "Deployment completed successfully!"
         }
         failure {
-            echo "❌ Deployment failed. Rolling back..."
+            echo "Deployment failed. Rolling back..."
         }
     }
 }
