@@ -16,7 +16,7 @@ pipeline {
 
         stage('Clean Workspace') {
             steps {
-                echo " Cleaning Workspace..."
+                echo "Cleaning Workspace..."
                 cleanWs()
             }
         }
@@ -36,7 +36,7 @@ pipeline {
         stage('Build with Maven') {
             steps {
                 script {
-                    echo " Running Maven clean install..."
+                    echo "Running Maven clean install..."
                     bat """
                     cd source
                     mvn clean install -DskipTests
@@ -48,7 +48,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo " Building Docker Image: ${IMAGE_NAME}:${VERSION}"
+                    echo "Building Docker Image: ${IMAGE_NAME}:${VERSION}"
 
                     bat """
                     cd source
@@ -63,29 +63,44 @@ pipeline {
             }
         }
 
-        stage('Deploy New Image') {
+        stage('Check and Deploy MySQL') {
             steps {
                 script {
-                    echo " Deploying new Docker image..."
+                    echo "Checking if MySQL container is running..."
 
                     bat """
                     cd source
 
-                    REM  Check if MySQL container is running
+                    REM  Check if MySQL container exists
                     docker ps --filter "name=mysql-container" --filter "status=running" -q
                     IF ERRORLEVEL 1 (
-                        echo "MySQL container is not running. Skipping MySQL container stop."
+                        echo "MySQL container not found or not healthy. Creating MySQL container..."
+
+                        REM  Create the MySQL container if it doesn't exist
+                        docker-compose up -d mysql-container
                     ) ELSE (
-                        echo "MySQL container is running. Skipping MySQL container stop."
+                        echo "MySQL container is healthy, skipping creation."
                     )
+                    """
+                }
+            }
+        }
 
-                    REM  Stop only backend service (if MySQL container is running)
-                    docker-compose stop backend || echo "No old container found"
+        stage('Deploy New Image') {
+            steps {
+                script {
+                    echo "Deploying new Docker image..."
 
-                    REM  Update backend image with new version
+                    bat """
+                    cd source
+
+                    REM  Stop only backend service (skip MySQL)
+                    docker-compose stop backend || echo "No old backend container found"
+
+                    REM  Update backend image with the new version
                     powershell -Command "(Get-Content docker-compose.yml) -replace 'image:.*', 'image: %IMAGE_NAME%:%VERSION%' | Set-Content docker-compose.yml"
                     
-                    REM  Start only backend, without MySQL
+                    REM  Start only backend, without affecting MySQL
                     docker-compose up -d --no-deps backend
 
                     REM  Verify backend connection
@@ -99,7 +114,7 @@ pipeline {
         stage('Rollback on Failure') {
             steps {
                 script {
-                    echo " Checking for Rollback..."
+                    echo "Checking for Rollback..."
 
                     bat """
                     REM  Rollback if deployment fails
@@ -117,7 +132,7 @@ pipeline {
         stage('Post-Deployment Cleanup') {
             steps {
                 script {
-                    echo " Cleaning up old Docker images..."
+                    echo "Cleaning up old Docker images..."
                     bat '''
                     docker image prune -f
                     docker rmi -f %IMAGE_NAME%:%BACKUP_VERSION% || echo "No old image to remove"
@@ -129,10 +144,10 @@ pipeline {
 
     post {
         success {
-            echo " Deployment completed successfully!"
+            echo "Deployment completed successfully!"
         }
         failure {
-            echo " Deployment failed. Rolling back..."
+            echo "Deployment failed. Rolling back..."
         }
     }
 }
