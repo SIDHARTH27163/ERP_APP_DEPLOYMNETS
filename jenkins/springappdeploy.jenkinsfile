@@ -32,7 +32,18 @@ pipeline {
                 }
             }
         }
-
+        stage('Build with Maven') {    
+            steps {
+                script {
+                    echo " Running Maven clean install..."
+                    
+                    bat """
+                    cd source
+                    mvn clean install -DskipTests   
+                    """
+                }
+            }
+        }
         stage('Build Docker Image') {
             steps {
                 script {
