@@ -62,7 +62,7 @@ pipeline {
             }
         }
 
-        stage('Deploy New Image') {
+                stage('Deploy New Image') {
             steps {
                 script {
                     echo " Deploying new Docker image..."
@@ -70,20 +70,23 @@ pipeline {
                     bat """
                     cd source
 
-                    REM  Stop the old container (without removing MySQL)
+                    REM ✅ Stop only backend service, not MySQL
                     docker-compose stop backend || echo "No old container found"
 
-                    REM  Start the new container with the latest image
+                    REM ✅ Update backend image with new version
                     powershell -Command "(Get-Content docker-compose.yml) -replace 'image:.*', 'image: %IMAGE_NAME%:%VERSION%' | Set-Content docker-compose.yml"
+                    
+                    REM ✅ Start only backend, without MySQL
                     docker-compose up -d --no-deps backend
 
-                    REM  Verify if the new container is healthy
+                    REM ✅ Verify MySQL and backend connection
                     timeout /t 10 /nobreak >nul
                     docker ps | findstr "%IMAGE_NAME%:%VERSION%" || exit 1
                     """
                 }
             }
         }
+
 
         stage('Rollback on Failure') {
             steps {
