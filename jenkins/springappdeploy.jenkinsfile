@@ -27,7 +27,7 @@ pipeline {
                 script {
                     // Use Windows batch command
                     bat """
-                    git clone -b %BRANCH% https://github.com/%GITHUB_REPO%.git source
+                    git clone -b %BRANCH% https://github.com/%GITHUB_REPO%.git erp-backend
                     """
                 }
             }
@@ -38,7 +38,7 @@ pipeline {
                 script {
                     echo "Running Maven clean install..."
                     bat """
-                    cd source
+                    cd erp-backend
                     mvn clean install -DskipTests
                     """
                 }
@@ -51,7 +51,7 @@ pipeline {
                     echo "Building Docker Image: ${IMAGE_NAME}:${VERSION}"
 
                     bat """
-                    cd source
+                    cd erp-backend
 
                     REM  Create a backup of the current running container
                     docker tag %IMAGE_NAME%:latest %IMAGE_NAME%:%BACKUP_VERSION% || echo "No backup available"
@@ -70,16 +70,12 @@ pipeline {
                     echo "Deploying new Docker image..."
 
                     bat """
-                    cd source
+                    cd erp-backend
 
                     docker-compose down 
 
-                    REM  Update backend image with the new version
-                    powershell -Command "(Get-Content docker-compose.yml) -replace 'image:.*', 'image: %IMAGE_NAME%:%VERSION%' | Set-Content docker-compose.yml"
                     docker-compose up -d --build
-                    REM  Verify backend connection
-                    timeout /t 10 /nobreak >nul
-                    docker ps | findstr "%IMAGE_NAME%:%VERSION%" || exit 1
+                    docker ps 
                     """
                 }
             }
