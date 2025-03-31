@@ -1,0 +1,116 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'GITHUB_REPO', defaultValue: 'SIDHARTH27163/ERP_SPRINGBOOT_APIs', description: 'GitHub Repository Name')
+        choice(name: 'BRANCH', choices: ['main', 'dev', 'feature'], description: 'Select the branch to checkout')  
+    }
+
+    environment {
+        IMAGE_NAME = "springboot-container"
+        VERSION = "1.0.${BUILD_NUMBER}"                     
+        BACKUP_VERSION = "backup-${BUILD_NUMBER - 1}"        
+    }
+
+    stages {
+
+        stage('Clean Workspace') {
+            steps {
+                echo " Cleaning Workspace..."
+                cleanWs()
+            }
+        }
+
+        stage('Clone Repo') {
+            steps {
+                echo "Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
+                script {
+                    //  Use Windows batch command
+                    bat """
+                    git clone -b %BRANCH% https://github.com/%GITHUB_REPO%.git source
+                    """
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    echo " Building Docker Image: ${IMAGE_NAME}:${VERSION}"
+
+                    bat """
+                    cd source
+
+                    REM  Create a backup of the current running container
+                    docker tag %IMAGE_NAME%:latest %IMAGE_NAME%:%BACKUP_VERSION% || echo "No backup available"
+
+                    REM  Build new image
+                    docker build -t %IMAGE_NAME%:%VERSION% .
+                    """
+                }
+            }
+        }
+
+        stage('Deploy New Image') {
+            steps {
+                script {
+                    echo " Deploying new Docker image..."
+
+                    bat """
+                    cd source
+
+                    REM  Stop the old container (without removing MySQL)
+                    docker-compose stop backend || echo "No old container found"
+
+                    REM  Start the new container with the latest image
+                    powershell -Command "(Get-Content docker-compose.yml) -replace 'image:.*', 'image: %IMAGE_NAME%:%VERSION%' | Set-Content docker-compose.yml"
+                    docker-compose up -d --no-deps backend
+
+                    REM  Verify if the new container is healthy
+                    timeout /t 10 /nobreak >nul
+                    docker ps | findstr "%IMAGE_NAME%:%VERSION%" || exit 1
+                    """
+                }
+            }
+        }
+
+        stage('Rollback on Failure') {
+            steps {
+                script {
+                    echo " Checking for Rollback..."
+
+                    bat """
+                    REM  Rollback if deployment fails
+                    if %ERRORLEVEL% NEQ 0 (
+                        echo "🚨 Deployment failed, rolling back..."
+                        docker-compose stop backend
+                        docker tag %IMAGE_NAME%:%BACKUP_VERSION% %IMAGE_NAME%:latest
+                        docker-compose up -d --no-deps backend
+                    )
+                    """
+                }
+            }
+        }
+
+        stage('Post-Deployment Cleanup') {
+            steps {
+                script {
+                    echo " Cleaning up old Docker images..."
+                    bat '''
+                    docker image prune -f
+                    docker rmi -f %IMAGE_NAME%:%BACKUP_VERSION% || echo "No old image to remove"
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo " Deployment completed successfully!"
+        }
+        failure {
+            echo " Deployment failed. Rolling back..."
+        }
+    }
+}
