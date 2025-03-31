@@ -23,6 +23,8 @@ RUN apt-get install -y wget && \
     echo "deb [signed-by=/usr/share/keyrings/corretto-archive-keyring.gpg] https://apt.corretto.aws stable main" | tee /etc/apt/sources.list.d/corretto.list && \
     apt-get update && \
     apt-get install -y java-21-amazon-corretto-jdk
+    
+RUN apt-get install -y maven
 
 RUN usermod -aG docker jenkins
 
