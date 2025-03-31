@@ -86,17 +86,18 @@ pipeline {
                 script {
                     echo "🔄 Checking for Rollback..."
 
-                    // ✅ Correct Rollback
+                    // ✅ Proper interpolation
                     sh """
-                    if [ $? -ne 0 ]; then
+                    if [ \${?} -ne 0 ]; then
                         echo "🚨 Deployment failed, rolling back..."
-                        docker tag ${IMAGE_NAME}:${BACKUP_VERSION} ${IMAGE_NAME}:latest
+                        docker tag \${IMAGE_NAME}:\${BACKUP_VERSION} \${IMAGE_NAME}:latest
                         docker-compose up -d
                     fi
                     """
                 }
             }
         }
+
 
     }
 
