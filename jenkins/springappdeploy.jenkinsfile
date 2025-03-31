@@ -10,8 +10,6 @@ pipeline {
         IMAGE_NAME = "springboot-container"
         VERSION = "1.0.${BUILD_NUMBER}"
         BACKUP_VERSION = "backup-${BUILD_NUMBER - 1}"
-        MYSQL_CONTAINER = "mysql-container"
-        MYSQL_VOLUME = "mysql_data"
     }
 
     stages {
@@ -27,6 +25,7 @@ pipeline {
             steps {
                 echo "Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
                 script {
+                    // Use Windows batch command
                     bat """
                     git clone -b %BRANCH% https://github.com/%GITHUB_REPO%.git erp-backend
                     """
@@ -41,34 +40,6 @@ pipeline {
                     bat """
                     cd erp-backend
                     mvn clean install -DskipTests
-                    """
-                }
-            }
-        }
-
-        stage('Ensure MySQL Container') {
-            steps {
-                script {
-                    echo "Ensuring MySQL container is running..."
-
-                    // ✅ Windows batch command to check if MySQL is running
-                    bat """
-                    FOR /F "tokens=*" %%i IN ('docker ps --filter "name=%MYSQL_CONTAINER%" --format "{{.Names}}"') DO SET MYSQL_RUNNING=%%i
-
-                    IF "%MYSQL_RUNNING%"=="" (
-                        echo "MySQL container not running. Starting it..."
-                       docker run -d ^
-                        --name mysql-container ^
-                        -e MYSQL_ROOT_PASSWORD=root ^
-                        -e MYSQL_DATABASE=erp ^
-                        -p 3306:3306 ^
-                        -v mysql_data:/var/lib/mysql ^
-                        --network=app-network ^
-                        mysql:8
-
-                    ) ELSE (
-                        echo "MySQL container is already running."
-                    )
                     """
                 }
             }
@@ -92,6 +63,7 @@ pipeline {
             }
         }
 
+
         stage('Deploy New Image') {
             steps {
                 script {
@@ -100,11 +72,9 @@ pipeline {
                     bat """
                     cd erp-backend
 
-                    REM Stop only the backend container, not MySQL
-                    docker-compose stop backend 
+                    docker-compose down 
 
-                    REM Deploy the backend with MySQL running separately
-                    docker-compose up -d --build backend
+                    docker-compose up -d --build
                     docker ps 
                     """
                 }
@@ -118,8 +88,8 @@ pipeline {
 
                     bat """
                     REM  Rollback if deployment fails
-                    IF %ERRORLEVEL% NEQ 0 (
-                        echo "Deployment failed, rolling back..."
+                    if %ERRORLEVEL% NEQ 0 (
+                        echo " Deployment failed, rolling back..."
                         docker-compose stop backend
                         docker tag %IMAGE_NAME%:%BACKUP_VERSION% %IMAGE_NAME%:latest
                         docker-compose up -d --no-deps backend
@@ -133,13 +103,9 @@ pipeline {
             steps {
                 script {
                     echo "Cleaning up old Docker images..."
-
                     bat '''
-                    echo "Removing backup image..."
-                    docker rmi -f %IMAGE_NAME%:%BACKUP_VERSION% || echo "No backup image found"
-
-                    echo "Pruning unused images..."
                     docker image prune -f
+                    docker rmi -f %IMAGE_NAME%:%BACKUP_VERSION% || echo "No old image to remove"
                     '''
                 }
             }
@@ -149,13 +115,6 @@ pipeline {
     post {
         success {
             echo "Deployment completed successfully!"
-            
-            script {
-                echo "Deleting backup image..."
-                bat """
-                docker rmi -f %IMAGE_NAME%:%BACKUP_VERSION% || echo "Backup image not found or already removed"
-                """
-            }
         }
         failure {
             echo "Deployment failed. Rolling back..."
