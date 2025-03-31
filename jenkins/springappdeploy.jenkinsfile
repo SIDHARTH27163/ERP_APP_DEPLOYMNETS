@@ -8,8 +8,8 @@ pipeline {
 
     environment {
         IMAGE_NAME = "springboot-container"
-        VERSION = "1.0.${BUILD_NUMBER}"                      // Version based on Jenkins Build Number
-        BACKUP_VERSION = "backup-${BUILD_NUMBER - 1}"        // Backup version tag
+        VERSION = "1.0.${BUILD_NUMBER}"                     
+        BACKUP_VERSION = "backup-${BUILD_NUMBER - 1}"        
     }
 
     stages {
@@ -25,78 +25,82 @@ pipeline {
             steps {
                 echo "Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
                 script {
-                    // Clone the selected branch from GitHub
-                    sh "git clone -b ${BRANCH} https://github.com/${GITHUB_REPO}.git source"
-                }
-            }
-        }
-
-        stage('Build with Maven') {    
-            steps {
-                script {
-                    echo " Running Maven clean install..."
-                    sh """
-                    cd source
-                    mvn clean install -DskipTests
+                    //  Use Windows batch command
+                    bat """
+                    git clone -b %BRANCH% https://github.com/%GITHUB_REPO%.git source
                     """
                 }
             }
         }
-
+        stage('Build with Maven') {    
+            steps {
+                script {
+                    echo " Running Maven clean install..."
+                    
+                    bat """
+                    cd source
+                    mvn clean install -DskipTests   
+                    """
+                }
+            }
+        }
         stage('Build Docker Image') {
             steps {
                 script {
                     echo " Building Docker Image: ${IMAGE_NAME}:${VERSION}"
 
-                    sh """
+                    bat """
                     cd source
-                    # Create a backup of the current running container
-                    docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:${BACKUP_VERSION} || echo "No backup available"
 
-                    # Build the new image
-                    docker build -t ${IMAGE_NAME}:${VERSION} .
+                    REM  Create a backup of the current running container
+                    docker tag %IMAGE_NAME%:latest %IMAGE_NAME%:%BACKUP_VERSION% || echo "No backup available"
+
+                    REM  Build new image
+                    docker build -t %IMAGE_NAME%:%VERSION% .
                     """
                 }
             }
         }
 
-        stage('Deploy New Image') {
+                stage('Deploy New Image') {
             steps {
                 script {
                     echo " Deploying new Docker image..."
 
-                    sh """
+                    bat """
                     cd source
 
-                    # Stop the backend service (without affecting MySQL)
+                    REM  Stop only backend service, not MySQL
                     docker-compose stop backend || echo "No old container found"
 
-                    # Update the backend image version
-                    sed -i 's|image:.*|image: ${IMAGE_NAME}:${VERSION}|' docker-compose.yml
+                    REM  Update backend image with new version
+                    powershell -Command "(Get-Content docker-compose.yml) -replace 'image:.*', 'image: %IMAGE_NAME%:%VERSION%' | Set-Content docker-compose.yml"
+                    
+                    REM  Start only backend, without MySQL
+                    docker-compose up -d 
 
-                    # Start the backend service with the new image (without MySQL)
-                    docker-compose up -d --no-deps backend
-
-                    # Verify the deployment
-                    timeout 10 docker ps | grep "${IMAGE_NAME}:${VERSION}" || exit 1
+                    REM  Verify MySQL and backend connection
+                    timeout /t 10 /nobreak >nul
+                    docker ps | findstr "%IMAGE_NAME%:%VERSION%" || exit 1
                     """
                 }
             }
         }
+
 
         stage('Rollback on Failure') {
             steps {
                 script {
                     echo " Checking for Rollback..."
 
-                    sh """
-                    # Rollback if deployment fails
-                    if [ $? -ne 0 ]; then
-                        echo " Deployment failed, rolling back..."
+                    bat """
+                    REM  Rollback if deployment fails
+                    if %ERRORLEVEL% NEQ 0 (
+                        echo "🚨 Deployment failed, rolling back..."
                         docker-compose stop backend
-                        docker tag ${IMAGE_NAME}:${BACKUP_VERSION} ${IMAGE_NAME}:latest
+                        docker tag %IMAGE_NAME%:%BACKUP_VERSION% %IMAGE_NAME%:latest
                         docker-compose up -d --no-deps backend
-                    fi
+                    )
                     """
                 }
             }
@@ -106,10 +110,10 @@ pipeline {
             steps {
                 script {
                     echo " Cleaning up old Docker images..."
-                    sh """
+                    bat '''
                     docker image prune -f
-                    docker rmi -f ${IMAGE_NAME}:${BACKUP_VERSION} || echo "No old image to remove"
-                    """
+                    docker rmi -f %IMAGE_NAME%:%BACKUP_VERSION% || echo "No old image to remove"
+                    '''
                 }
             }
         }
