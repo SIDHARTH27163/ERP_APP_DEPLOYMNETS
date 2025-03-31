@@ -10,6 +10,8 @@ pipeline {
         IMAGE_NAME = "springboot-container"
         VERSION = "1.0.${BUILD_NUMBER}"
         BACKUP_VERSION = "backup-${BUILD_NUMBER - 1}"
+        MYSQL_CONTAINER = "mysql-container"
+        MYSQL_VOLUME = "mysql_data"
     }
 
     stages {
@@ -25,7 +27,6 @@ pipeline {
             steps {
                 echo "Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
                 script {
-                    // Use Windows batch command
                     bat """
                     git clone -b %BRANCH% https://github.com/%GITHUB_REPO%.git erp-backend
                     """
@@ -41,6 +42,34 @@ pipeline {
                     cd erp-backend
                     mvn clean install -DskipTests
                     """
+                }
+            }
+        }
+
+        stage('Ensure MySQL Container') {
+            steps {
+                script {
+                    echo "Ensuring MySQL container is running..."
+
+                    // Start MySQL container only if not running
+                    def mysqlRunning = sh(script: "docker ps --filter name=${MYSQL_CONTAINER} --format '{{.Names}}'", returnStdout: true).trim()
+
+                    if (mysqlRunning != MYSQL_CONTAINER) {
+                        echo "MySQL container not running. Starting it..."
+                        bat """
+                        docker run -d \
+                        --name %MYSQL_CONTAINER% \
+                        -e MYSQL_ROOT_PASSWORD=root \
+                        -e MYSQL_DATABASE=erp \
+                        -e MYSQL_USER=root \
+                        -e MYSQL_PASSWORD=root \
+                        -p 3306:3306 \
+                        -v %MYSQL_VOLUME%:/var/lib/mysql \
+                        mysql:8
+                        """
+                    } else {
+                        echo "MySQL container is already running."
+                    }
                 }
             }
         }
@@ -63,7 +92,6 @@ pipeline {
             }
         }
 
-
         stage('Deploy New Image') {
             steps {
                 script {
@@ -72,9 +100,11 @@ pipeline {
                     bat """
                     cd erp-backend
 
-                    docker-compose down 
+                    REM Stop only the backend container, not MySQL
+                    docker-compose stop backend 
 
-                    docker-compose up -d --build
+                    REM Deploy the backend with MySQL running separately
+                    docker-compose up -d --build backend
                     docker ps 
                     """
                 }
@@ -103,9 +133,14 @@ pipeline {
             steps {
                 script {
                     echo "Cleaning up old Docker images..."
+
+                    // Remove the backup image after successful deployment
                     bat '''
+                    echo "Removing backup image..."
+                    docker rmi -f %IMAGE_NAME%:%BACKUP_VERSION% || echo "No backup image found"
+
+                    echo "Pruning unused images..."
                     docker image prune -f
-                    docker rmi -f %IMAGE_NAME%:%BACKUP_VERSION% || echo "No old image to remove"
                     '''
                 }
             }
@@ -115,6 +150,14 @@ pipeline {
     post {
         success {
             echo "Deployment completed successfully!"
+            
+            //  Remove backup image on success
+            script {
+                echo "Deleting backup image..."
+                bat """
+                docker rmi -f %IMAGE_NAME%:%BACKUP_VERSION% || echo "Backup image not found or already removed"
+                """
+            }
         }
         failure {
             echo "Deployment failed. Rolling back..."
