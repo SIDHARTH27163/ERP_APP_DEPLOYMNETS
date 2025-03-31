@@ -25,9 +25,9 @@ pipeline {
             steps {
                 echo " Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
                 script {
-                    //  Clone into subfolder named `source`
+                    
                     sh """
-                    git clone -b ${BRANCH} https://github.com/${GITHUB_REPO}.git source
+                    git clone -b ${BRANCH} https://github.com/${GITHUB_REPO}.git 
                     """
                 }
             }
@@ -40,7 +40,7 @@ pipeline {
 
                     //  Navigate to correct folder before building
                     sh """
-                    cd source  
+                  
                     docker build -t ${IMAGE_NAME}:${VERSION} .
                     """
                 }
@@ -68,7 +68,7 @@ pipeline {
 
                     //  Deploy from correct folder
                     sh """
-                    cd source 
+                   
                     sed -i "s|image:.*|image: ${IMAGE_NAME}:${VERSION}|" docker-compose.yml
                     docker-compose up -d
                     """
