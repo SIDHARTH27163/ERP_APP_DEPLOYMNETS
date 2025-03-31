@@ -57,15 +57,15 @@ pipeline {
 
                     IF "%MYSQL_RUNNING%"=="" (
                         echo "MySQL container not running. Starting it..."
-                        docker run -d ^
-                        --name %MYSQL_CONTAINER% ^
+                       docker run -d ^
+                        --name mysql-container ^
                         -e MYSQL_ROOT_PASSWORD=root ^
                         -e MYSQL_DATABASE=erp ^
-                        -e MYSQL_USER=root ^
-                        -e MYSQL_PASSWORD=root ^
                         -p 3306:3306 ^
-                        -v %MYSQL_VOLUME%:/var/lib/mysql ^
+                        -v mysql_data:/var/lib/mysql ^
+                        --network=erp-network ^
                         mysql:8
+
                     ) ELSE (
                         echo "MySQL container is already running."
                     )
