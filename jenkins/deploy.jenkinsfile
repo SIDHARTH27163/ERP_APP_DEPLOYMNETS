@@ -80,12 +80,13 @@ pipeline {
 
                     // ✅ Check container status
                     sh """
-                    if [ $? -ne 0 ]; then
-                      echo " Deployment failed, rolling back..."
-                      docker tag ${IMAGE_NAME}:${BACKUP_VERSION} ${IMAGE_NAME}:latest
-                      docker-compose up -d
+                    if [ \\$? -ne 0 ]; then
+                    echo " Deployment failed, rolling back..."
+                    docker tag \\${IMAGE_NAME}:\\${BACKUP_VERSION} \\${IMAGE_NAME}:latest
+                    docker-compose up -d
                     fi
                     """
+
                 }
             }
         }
