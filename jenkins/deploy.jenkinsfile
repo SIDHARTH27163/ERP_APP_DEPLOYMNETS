@@ -83,7 +83,7 @@ pipeline {
                     sh """
                     cd source
                     sed -i "s|image:.*|image: ${IMAGE_NAME}:${VERSION}|" docker-compose.yml
-                    docker-compose up -d
+                    docker-compose up -d --no-deps backend
                     """
                 }
             }
