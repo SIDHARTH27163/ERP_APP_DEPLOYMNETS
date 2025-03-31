@@ -72,13 +72,10 @@ pipeline {
                     bat """
                     cd source
 
-                    REM  Stop only backend service (skip MySQL)
-                    docker-compose stop backend || echo "No old backend container found"
+                    docker-compose down 
 
                     REM  Update backend image with the new version
                     powershell -Command "(Get-Content docker-compose.yml) -replace 'image:.*', 'image: %IMAGE_NAME%:%VERSION%' | Set-Content docker-compose.yml"
-                    
-                    REM  Start only backend, without affecting MySQL
                     docker-compose up -d --build
                     REM  Verify backend connection
                     timeout /t 10 /nobreak >nul
