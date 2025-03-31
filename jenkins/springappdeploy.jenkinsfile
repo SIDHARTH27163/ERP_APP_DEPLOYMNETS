@@ -63,7 +63,7 @@ pipeline {
                         -e MYSQL_DATABASE=erp ^
                         -p 3306:3306 ^
                         -v mysql_data:/var/lib/mysql ^
-                        --network=erp-network ^
+                        --network=app-network ^
                         mysql:8
 
                     ) ELSE (
