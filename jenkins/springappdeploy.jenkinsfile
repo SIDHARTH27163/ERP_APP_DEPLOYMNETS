@@ -63,28 +63,6 @@ pipeline {
             }
         }
 
-        stage('Check and Deploy MySQL') {
-            steps {
-                script {
-                    echo "Checking if MySQL container is running..."
-
-                    bat """
-                    cd source
-
-                    REM  Check if MySQL container exists
-                    docker ps --filter "name=mysql-container" --filter "status=running" -q
-                    IF ERRORLEVEL 1 (
-                        echo "MySQL container not found or not healthy. Creating MySQL container..."
-
-                        REM  Create the MySQL container if it doesn't exist
-                        docker-compose up -d mysql-container
-                    ) ELSE (
-                        echo "MySQL container is healthy, skipping creation."
-                    )
-                    """
-                }
-            }
-        }
 
         stage('Deploy New Image') {
             steps {
@@ -101,8 +79,7 @@ pipeline {
                     powershell -Command "(Get-Content docker-compose.yml) -replace 'image:.*', 'image: %IMAGE_NAME%:%VERSION%' | Set-Content docker-compose.yml"
                     
                     REM  Start only backend, without affecting MySQL
-                    docker-compose up -d --no-deps backend
-
+                    docker-compose up -d --build
                     REM  Verify backend connection
                     timeout /t 10 /nobreak >nul
                     docker ps | findstr "%IMAGE_NAME%:%VERSION%" || exit 1
