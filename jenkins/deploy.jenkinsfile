@@ -60,10 +60,11 @@ pipeline {
                     echo "Cleaning up old Docker images"
 
                     // ✅ Remove old backup image
-                    sh """
-                    docker image prune -f
-                    docker rmi -f ${IMAGE_NAME}:${BACKUP_VERSION} || true
-                    """
+                   sh """
+                        docker image prune -f
+                        docker rmi -f \${IMAGE_NAME}:\${BACKUP_VERSION} || true
+                        """
+
                 }
             }
         }
