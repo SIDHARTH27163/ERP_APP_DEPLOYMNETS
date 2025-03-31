@@ -3,13 +3,13 @@ pipeline {
 
     parameters {
         string(name: 'GITHUB_REPO', defaultValue: 'SIDHARTH27163/ERP_SPRINGBOOT_APIs', description: 'GitHub Repository Name')
-        choice(name: 'BRANCH', choices: ['main', 'dev', 'feature'], description: 'Select the branch to checkout')  
+        choice(name: 'BRANCH', choices: ['main', 'dev', 'feature'], description: 'Select the branch to checkout')
     }
 
     environment {
         IMAGE_NAME = "springboot-container"
-        VERSION = "1.0.${BUILD_NUMBER}"                     
-        BACKUP_VERSION = "backup-${BUILD_NUMBER - 1}"        
+        VERSION = "1.0.${BUILD_NUMBER}"
+        BACKUP_VERSION = "backup-${BUILD_NUMBER - 1}"
     }
 
     stages {
@@ -25,25 +25,26 @@ pipeline {
             steps {
                 echo "Cloning repository from GitHub: ${GITHUB_REPO} - Branch: ${BRANCH}"
                 script {
-                    //  Use Windows batch command
+                    // Use Windows batch command
                     bat """
                     git clone -b %BRANCH% https://github.com/%GITHUB_REPO%.git source
                     """
                 }
             }
         }
-        stage('Build with Maven') {    
+
+        stage('Build with Maven') {
             steps {
                 script {
                     echo " Running Maven clean install..."
-                    
                     bat """
                     cd source
-                    mvn clean install -DskipTests   
+                    mvn clean install -DskipTests
                     """
                 }
             }
         }
+
         stage('Build Docker Image') {
             steps {
                 script {
@@ -62,7 +63,7 @@ pipeline {
             }
         }
 
-                stage('Deploy New Image') {
+        stage('Deploy New Image') {
             steps {
                 script {
                     echo " Deploying new Docker image..."
@@ -70,23 +71,30 @@ pipeline {
                     bat """
                     cd source
 
-                    REM  Stop only backend service, not MySQL
+                    REM  Check if MySQL container is running
+                    docker ps --filter "name=mysql-container" --filter "status=running" -q
+                    IF ERRORLEVEL 1 (
+                        echo "MySQL container is not running. Skipping MySQL container stop."
+                    ) ELSE (
+                        echo "MySQL container is running. Skipping MySQL container stop."
+                    )
+
+                    REM  Stop only backend service (if MySQL container is running)
                     docker-compose stop backend || echo "No old container found"
 
                     REM  Update backend image with new version
                     powershell -Command "(Get-Content docker-compose.yml) -replace 'image:.*', 'image: %IMAGE_NAME%:%VERSION%' | Set-Content docker-compose.yml"
                     
                     REM  Start only backend, without MySQL
-                    docker-compose up -d 
+                    docker-compose up -d --no-deps backend
 
-                    REM  Verify MySQL and backend connection
+                    REM  Verify backend connection
                     timeout /t 10 /nobreak >nul
                     docker ps | findstr "%IMAGE_NAME%:%VERSION%" || exit 1
                     """
                 }
             }
         }
-
 
         stage('Rollback on Failure') {
             steps {
@@ -96,7 +104,7 @@ pipeline {
                     bat """
                     REM  Rollback if deployment fails
                     if %ERRORLEVEL% NEQ 0 (
-                        echo "🚨 Deployment failed, rolling back..."
+                        echo " Deployment failed, rolling back..."
                         docker-compose stop backend
                         docker tag %IMAGE_NAME%:%BACKUP_VERSION% %IMAGE_NAME%:latest
                         docker-compose up -d --no-deps backend
