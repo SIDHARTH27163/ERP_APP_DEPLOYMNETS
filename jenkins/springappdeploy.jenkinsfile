@@ -71,8 +71,6 @@ pipeline {
                     (Get-Content springboot-deployment.yaml) -replace '__VERSION__', \$env:VERSION | Set-Content k8s-springboot.yaml
 
                     kubectl apply -f mysql-deployment.yaml
-                    kubectl apply -f mysql-service.yaml
-
                     kubectl apply -f k8s-springboot.yaml
                     kubectl apply -f springboot-service.yaml
                     """
