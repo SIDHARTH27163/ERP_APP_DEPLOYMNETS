@@ -18,14 +18,14 @@ pipeline {
 
         stage('Clean Workspace') {
             steps {
-                echo "🧹 Cleaning Workspace..."
+                echo " Cleaning Workspace..."
                 cleanWs()
             }
         }
 
         stage('Clone Repo') {
             steps {
-                echo "📦 Cloning Repo: ${GITHUB_REPO} - Branch: ${BRANCH}"
+                echo " Cloning Repo: ${GITHUB_REPO} - Branch: ${BRANCH}"
                 bat """
                 git clone -b %BRANCH% https://github.com/%GITHUB_REPO%.git erp-backend
                 """
@@ -51,13 +51,13 @@ pipeline {
             }
         }
 
-        stage('Push Docker Image') {
-            steps {
-                bat """
-                docker push %DOCKER_REGISTRY%/%IMAGE_NAME%:%VERSION%
-                """
-            }
-        }
+        // stage('Push Docker Image') {
+        //     steps {
+        //         bat """
+        //         docker push %DOCKER_REGISTRY%/%IMAGE_NAME%:%VERSION%
+        //         """
+        //     }
+        // }
 
         stage('Deploy to Kubernetes') {
             steps {
@@ -79,7 +79,7 @@ pipeline {
                     def status = bat(script: 'kubectl rollout status deployment/%DEPLOYMENT_NAME%', returnStatus: true)
                     if (status != 0) {
                         currentBuild.result = 'FAILURE'
-                        error("❌ Deployment failed!")
+                        error("Deployment failed!")
                     }
                 }
             }
@@ -97,7 +97,7 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployment succeeded. Cleaning up old deployments..."
+            echo "Deployment succeeded. Cleaning up old deployments..."
             bat """
             echo Stopping backup deployment (if running)
             kubectl delete deployment ${DEPLOYMENT_NAME}-backup --ignore-not-found=true
@@ -105,7 +105,7 @@ pipeline {
         }
 
         failure {
-            echo "❌ Deployment failed! Rolling back to previous stable version..."
+            echo " Deployment failed! Rolling back to previous stable version..."
 
             bat """
             echo Creating backup deployment using: %IMAGE_NAME%:%BACKUP_VERSION%
