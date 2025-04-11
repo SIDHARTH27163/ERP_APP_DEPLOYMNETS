@@ -78,17 +78,22 @@ pipeline {
             }
         }
 
-        stage('Health Check') {
-            steps {
+       stage('Health Check') {
+        steps {
+            withCredentials([file(credentialsId: 'kubeconfig-cred-id', variable: 'KUBECONFIG')]) {
                 script {
                     def result = bat(script: "kubectl rollout status deployment/${DEPLOYMENT_NAME}", returnStatus: true)
                     if (result != 0) {
                         currentBuild.result = 'FAILURE'
                         error("Spring Boot Deployment Failed")
+                    } else {
+                        echo "Deployment successful!"
                     }
                 }
             }
         }
+    }
+
 
         stage('Cleanup Old Images') {
             steps {
