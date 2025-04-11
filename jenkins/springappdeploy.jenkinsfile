@@ -59,18 +59,19 @@ pipeline {
         //     }
         // }
 
-        stage('Deploy to Kubernetes') {
-            steps {
-                bat """
-                cd erp-backend
+       stage('Deploy to Kubernetes') {
+    steps {
+        bat """
+        cd erp-backend
 
-                powershell -Command "(Get-Content springboot-deployment.yaml) -replace '__VERSION__', '%VERSION%' | Set-Content temp-deployment.yaml"
+        powershell -Command "(Get-Content springboot-deployment.yaml) -replace '__VERSION__', \$env:VERSION | Set-Content temp-deployment.yaml"
 
-                kubectl apply -f temp-deployment.yaml
-                kubectl apply -f springboot-service.yaml
-                """
-            }
-        }
+        kubectl apply -f temp-deployment.yaml
+        kubectl apply -f springboot-service.yaml
+        """
+    }
+}
+
 
 
         stage('Health Check') {
@@ -107,13 +108,13 @@ pipeline {
         failure {
             echo " Deployment failed! Rolling back to previous stable version..."
 
-            bat """
+            echo """
             echo Creating backup deployment using: %IMAGE_NAME%:%BACKUP_VERSION%
 
             kubectl delete deployment ${DEPLOYMENT_NAME} --ignore-not-found=true
 
             REM Create deployment using backup image
-            powershell -Command "(Get-Content erp-backend/k8s/springboot-deployment.yaml) -replace 'image: .*', 'image: %DOCKER_REGISTRY%/%IMAGE_NAME%:%BACKUP_VERSION%' | Set-Content rollback.yaml"
+            powershell -Command "(Get-Content erp-backend/springboot-deployment.yaml) -replace 'image: .*', 'image: %DOCKER_REGISTRY%/%IMAGE_NAME%:%BACKUP_VERSION%' | Set-Content rollback.yaml"
 
             kubectl apply -f rollback.yaml
 
