@@ -2,14 +2,15 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'GITHUB_REPO', defaultValue: 'SIDHARTH27163/ERP_SPRINGBOOT_APIs', description: 'GitHub Repository Name')
-        choice(name: 'BRANCH', choices: ['main', 'dev', 'feature'], description: 'Select the branch to checkout')
+        string(name: 'GITHUB_REPO', defaultValue: 'SIDHARTH27163/ERP_SPRINGBOOT_APIs', description: 'GitHub Repository')
+        choice(name: 'BRANCH', choices: ['main', 'dev', 'feature'], description: 'Branch to build')
     }
 
     environment {
         IMAGE_NAME = "springboot-container"
         DOCKER_REGISTRY = "localhost:5000"
         DEPLOYMENT_NAME = "springboot-app"
+        K8S_DIR = "k8s"
     }
 
     stages {
@@ -20,24 +21,24 @@ pipeline {
             }
         }
 
-        stage('Clone Repo') {
+        stage('Clone Repository') {
             steps {
                 bat """
-                git clone -b ${params.BRANCH} https://github.com/${params.GITHUB_REPO}.git erp-backend
+                git clone -b ${params.BRANCH} https://github.com/${params.GITHUB_REPO}.git app
                 """
             }
         }
 
-        stage('Build with Maven') {
+        stage('Build Spring Boot App') {
             steps {
                 bat """
-                cd erp-backend
-                mvn clean install -DskipTests
+                cd app/EntryApp
+                mvn clean package -DskipTests
                 """
             }
         }
 
-        stage('Build & Tag Docker Image') {
+        stage('Build Docker Image') {
             steps {
                 script {
                     env.VERSION = "1.0.${env.BUILD_NUMBER}"
@@ -45,37 +46,34 @@ pipeline {
                 }
 
                 bat """
-                set IMAGE_NAME=${IMAGE_NAME}
-                set VERSION=${VERSION}
-                set DOCKER_REGISTRY=${DOCKER_REGISTRY}
-
-                cd erp-backend
-                docker build -t %IMAGE_NAME%:%VERSION% .
-                docker tag %IMAGE_NAME%:%VERSION% %DOCKER_REGISTRY%/%IMAGE_NAME%:%VERSION%
+                cd app
+                docker build -t ${IMAGE_NAME}:${VERSION} .
+                docker tag ${IMAGE_NAME}:${VERSION} ${DOCKER_REGISTRY}/${IMAGE_NAME}:${VERSION}
                 """
             }
         }
 
-        // Uncomment if pushing to registry is needed
-        // stage('Push Docker Image') {
-        //     steps {
-        //         bat """
-        //         docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${VERSION}
-        //         """
-        //     }
-        // }
+        stage('Push Docker Image (optional)') {
+            steps {
+                bat "docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${VERSION}"
+            }
+        }
 
-        stage('Deploy to Kubernetes') {
+        stage('K8s Deploy MySQL & App') {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG')]) {
                     powershell """
                     \$env:VERSION = '${VERSION}'
 
-                    cd erp-backend
+                    cd app
 
-                    (Get-Content springboot-deployment.yaml) -replace '__VERSION__', \$env:VERSION | Set-Content temp-deployment.yaml
+                    # Replace version in deployment YAML
+                    (Get-Content springboot-deployment.yaml) -replace '__VERSION__', \$env:VERSION | Set-Content k8s-springboot.yaml
 
-                    kubectl apply -f temp-deployment.yaml
+                    kubectl apply -f mysql-deployment.yaml
+                    kubectl apply -f mysql-service.yaml
+
+                    kubectl apply -f k8s-springboot.yaml
                     kubectl apply -f springboot-service.yaml
                     """
                 }
@@ -85,20 +83,20 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    def status = bat(script: "kubectl rollout status deployment/${DEPLOYMENT_NAME}", returnStatus: true)
-                    if (status != 0) {
+                    def result = bat(script: "kubectl rollout status deployment/${DEPLOYMENT_NAME}", returnStatus: true)
+                    if (result != 0) {
                         currentBuild.result = 'FAILURE'
-                        error("Deployment failed!")
+                        error("Spring Boot Deployment Failed")
                     }
                 }
             }
         }
 
-        stage('Post-Deployment Cleanup') {
+        stage('Cleanup Old Images') {
             steps {
                 bat """
                 docker image prune -f
-                docker rmi -f ${IMAGE_NAME}:${BACKUP_VERSION} || echo "No old image found"
+                docker rmi -f ${IMAGE_NAME}:${BACKUP_VERSION} || echo "No old image"
                 """
             }
         }
@@ -106,27 +104,25 @@ pipeline {
 
     post {
         success {
-            echo "Deployment succeeded. Cleaning up old deployments..."
-            bat """
-            kubectl delete deployment ${DEPLOYMENT_NAME}-backup --ignore-not-found=true
-            """
+            echo "🎉 Deployment successful!"
         }
 
         failure {
-            echo "Deployment failed! Rolling back to previous stable version..."
+            echo "⚠️ Deployment failed. Rolling back..."
 
             powershell """
-            \$env:IMAGE_NAME = '${IMAGE_NAME}'
+            \$env:VERSION = '${BACKUP_VERSION}'
             \$env:DOCKER_REGISTRY = '${DOCKER_REGISTRY}'
-            \$env:BACKUP_VERSION = '${BACKUP_VERSION}'
+            \$env:IMAGE_NAME = '${IMAGE_NAME}'
 
+            # Delete failed deployment
             kubectl delete deployment ${DEPLOYMENT_NAME} --ignore-not-found=true
 
-            (Get-Content erp-backend/springboot-deployment.yaml) -replace 'image: .*', 'image: \$env:DOCKER_REGISTRY/\$env:IMAGE_NAME:\$env:BACKUP_VERSION' | Set-Content rollback.yaml
+            # Rollback using older version
+            (Get-Content app/springboot-deployment.yaml) -replace '__VERSION__', \$env:VERSION | Set-Content rollback.yaml
 
             kubectl apply -f rollback.yaml
-
-            kubectl patch deployment ${DEPLOYMENT_NAME} -p '{"metadata":{"name":"${DEPLOYMENT_NAME}-backup"}}'
+            kubectl patch deployment ${DEPLOYMENT_NAME} -p '{"metadata":{"name":"${DEPLOYMENT_NAME}-rollback"}}'
             """
         }
     }
