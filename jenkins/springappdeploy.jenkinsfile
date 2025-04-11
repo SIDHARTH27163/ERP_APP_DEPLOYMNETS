@@ -80,7 +80,7 @@ pipeline {
 
        stage('Health Check') {
         steps {
-            withCredentials([file(credentialsId: 'kubeconfig-cred-id', variable: 'KUBECONFIG')]) {
+            withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG')]) {
                 script {
                     def result = bat(script: "kubectl rollout status deployment/${DEPLOYMENT_NAME}", returnStatus: true)
                     if (result != 0) {
@@ -113,20 +113,6 @@ pipeline {
         failure {
             echo "⚠️ Deployment failed. Rolling back..."
 
-            powershell """
-            \$env:VERSION = '${BACKUP_VERSION}'
-            \$env:DOCKER_REGISTRY = '${DOCKER_REGISTRY}'
-            \$env:IMAGE_NAME = '${IMAGE_NAME}'
-
-            # Delete failed deployment
-            kubectl delete deployment ${DEPLOYMENT_NAME} --ignore-not-found=true
-
-            # Rollback using older version
-            (Get-Content app/springboot-deployment.yaml) -replace '__VERSION__', \$env:VERSION | Set-Content rollback.yaml
-
-            kubectl apply -f rollback.yaml
-            kubectl patch deployment ${DEPLOYMENT_NAME} -p '{"metadata":{"name":"${DEPLOYMENT_NAME}-rollback"}}'
-            """
         }
     }
 }
