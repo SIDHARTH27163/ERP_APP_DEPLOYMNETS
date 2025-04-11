@@ -61,6 +61,7 @@ pipeline {
 
        stage('Deploy to Kubernetes') {
     steps {
+        withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG')]) {
         bat """
         cd erp-backend
 
@@ -69,6 +70,7 @@ pipeline {
         kubectl apply -f temp-deployment.yaml
         kubectl apply -f springboot-service.yaml
         """
+    }
     }
 }
 
