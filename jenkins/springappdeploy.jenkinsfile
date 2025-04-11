@@ -53,11 +53,11 @@ pipeline {
             }
         }
 
-        stage('Push Docker Image (optional)') {
-            steps {
-                bat "docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${VERSION}"
-            }
-        }
+        // stage('Push Docker Image (optional)') {
+        //     steps {
+        //         bat "docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${VERSION}"
+        //     }
+        // }
 
         stage('K8s Deploy MySQL & App') {
             steps {
