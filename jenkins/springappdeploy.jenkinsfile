@@ -33,7 +33,7 @@ pipeline {
             steps {
                 bat """
                 cd app/EntryApp
-                mvn clean package -DskipTests
+                mvn clean install
                 """
             }
         }
