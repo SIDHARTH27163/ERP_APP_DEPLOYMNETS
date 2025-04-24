@@ -32,7 +32,7 @@ pipeline {
         stage('Build Spring Boot App') {
             steps {
                 bat """
-                cd app/EntryApp
+                cd app
                 mvn clean install
                 """
             }
